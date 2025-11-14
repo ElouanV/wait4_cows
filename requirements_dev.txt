@@ -1,0 +1,14 @@
+# Development dependencies
+
+# Code formatting
+black>=23.0.0
+
+# Linting
+flake8>=6.0.0
+
+# Testing
+pytest>=7.4.0
+pytest-cov>=4.1.0
+
+# Type checking (optional)
+mypy>=1.5.0

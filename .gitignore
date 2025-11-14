@@ -1,0 +1,11 @@
+./data
+./outputs
+./venv
+./.venv
+__pycache__/
+*.pyc
+.DS_Store
+.env
+.pytest_cache/
+.ipynb_checkpoints/
+.vscode/
