@@ -1,5 +1,5 @@
 data
-./outputs
+outputs
 ./venv
 ./.venv
 __pycache__/
