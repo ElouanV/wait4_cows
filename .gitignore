@@ -9,4 +9,7 @@ __pycache__/
 .pytest_cache/
 .ipynb_checkpoints/
 .vscode/
+.coverage
+htmlcov/
+tests/test_data/
 Vidéos
