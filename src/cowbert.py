@@ -294,6 +294,107 @@ def calculate_accuracy(output, labels):
         return 0.0
     return correct / total
 
+
+def calculate_per_cow_accuracy(model, dataloader, device, id_to_cow):
+    """
+    Calculate accuracy per cow ID.
+    Returns a dictionary mapping cow_id -> (correct, total, accuracy).
+    """
+    model.eval()
+    
+    # Track correct and total predictions per cow
+    cow_stats = defaultdict(lambda: {'correct': 0, 'total': 0})
+    
+    with torch.no_grad():
+        for input_ids, labels in tqdm(dataloader, desc="Computing per-cow accuracy"):
+            input_ids = input_ids.to(device)
+            labels = labels.to(device)
+            
+            output = model(input_ids, src_mask=None)
+            predictions = output.argmax(dim=-1)  # [batch_size, seq_len]
+            
+            # Process each sample in the batch
+            batch_size, seq_len = labels.shape
+            for b in range(batch_size):
+                for i in range(seq_len):
+                    if labels[b, i] != -100:  # This position is masked
+                        true_cow_id = labels[b, i].item()
+                        pred_cow_id = predictions[b, i].item()
+                        
+                        # Only count if it's a valid cow ID (not special token)
+                        if true_cow_id < len(id_to_cow):
+                            cow_name = id_to_cow[true_cow_id]
+                            cow_stats[cow_name]['total'] += 1
+                            if pred_cow_id == true_cow_id:
+                                cow_stats[cow_name]['correct'] += 1
+    
+    # Calculate accuracy for each cow
+    results = {}
+    for cow_name, stats in cow_stats.items():
+        if stats['total'] > 0:
+            accuracy = stats['correct'] / stats['total']
+            results[cow_name] = {
+                'correct': stats['correct'],
+                'total': stats['total'],
+                'accuracy': accuracy
+            }
+    
+    return results
+
+
+def plot_per_cow_accuracy(per_cow_results, save_path, top_n=None):
+    """
+    Create a bar plot of per-cow accuracy.
+    
+    Args:
+        per_cow_results: Dict mapping cow_id -> {'correct', 'total', 'accuracy'}
+        save_path: Path to save the plot
+        top_n: If specified, only plot top_n and bottom_n cows
+    """
+    # Sort by accuracy
+    sorted_cows = sorted(per_cow_results.items(), key=lambda x: x[1]['accuracy'], reverse=True)
+    
+    if top_n and len(sorted_cows) > top_n * 2:
+        # Show top N and bottom N
+        selected_cows = sorted_cows[:top_n] + sorted_cows[-top_n:]
+    else:
+        selected_cows = sorted_cows
+    
+    cow_names = [cow for cow, _ in selected_cows]
+    accuracies = [stats['accuracy'] for _, stats in selected_cows]
+    totals = [stats['total'] for _, stats in selected_cows]
+    
+    # Create figure
+    fig, ax = plt.subplots(figsize=(16, 8))
+    
+    # Color bars based on accuracy
+    colors = plt.cm.RdYlGn([acc for acc in accuracies])
+    bars = ax.bar(range(len(cow_names)), accuracies, color=colors, edgecolor='black', linewidth=0.5)
+    
+    # Add value labels on bars
+    for i, (bar, acc, total) in enumerate(zip(bars, accuracies, totals)):
+        height = bar.get_height()
+        ax.text(bar.get_x() + bar.get_width()/2., height,
+                f'{acc:.1%}\n(n={total})',
+                ha='center', va='bottom', fontsize=8, fontweight='bold')
+    
+    # Customize plot
+    ax.set_xlabel('Cow ID', fontsize=12, fontweight='bold')
+    ax.set_ylabel('Accuracy', fontsize=12, fontweight='bold')
+    ax.set_title('CowBERT: Per-Cow Prediction Accuracy', fontsize=14, fontweight='bold')
+    ax.set_xticks(range(len(cow_names)))
+    ax.set_xticklabels(cow_names, rotation=45, ha='right')
+    ax.set_ylim(0, 1.0)
+    ax.axhline(y=np.mean(accuracies), color='blue', linestyle='--', linewidth=2, label=f'Mean: {np.mean(accuracies):.1%}')
+    ax.grid(axis='y', alpha=0.3)
+    ax.legend()
+    
+    plt.tight_layout()
+    plt.savefig(save_path, dpi=300, bbox_inches='tight')
+    print(f"✅ Saved per-cow accuracy plot: {save_path}")
+    
+    return fig
+
 def train_cowbert(
     model, 
     train_dataloader,
@@ -310,6 +411,11 @@ def train_cowbert(
     train_acc_history = []
     val_loss_history = []
     val_acc_history = []
+    
+    # Track best model
+    best_val_acc = 0.0
+    best_epoch = 0
+    best_model_state = None
     
     print(f"\nTraining CowBERT on {device}...", flush=True)
     
@@ -376,13 +482,27 @@ def train_cowbert(
             val_acc_history.append(avg_val_acc)
             val_msg = f" | Val Loss: {avg_val_loss:.4f} | Val Acc: {avg_val_acc:.4f}"
             
+            # Save best model
+            if avg_val_acc > best_val_acc:
+                best_val_acc = avg_val_acc
+                best_epoch = epoch
+                best_model_state = model.state_dict().copy()
+                print(f"   ⭐ New best model! Val Acc: {best_val_acc:.4f}", flush=True)
+            
         print(f"   Train Loss: {avg_loss:.4f} | Train Acc: {avg_acc:.4f}{val_msg}", flush=True)
-        
+    
+    # Restore best model
+    if best_model_state is not None:
+        model.load_state_dict(best_model_state)
+        print(f"\n✅ Restored best model from epoch {best_epoch} (Val Acc: {best_val_acc:.4f})", flush=True)
+    
     return {
         'train_loss': train_loss_history,
         'train_acc': train_acc_history,
         'val_loss': val_loss_history,
-        'val_acc': val_acc_history
+        'val_acc': val_acc_history,
+        'best_epoch': best_epoch,
+        'best_val_acc': best_val_acc
     }
 
 
@@ -525,22 +645,38 @@ def main():
     ax1.plot(history['train_loss'], label='Train Loss')
     if history['val_loss']:
         ax1.plot(history['val_loss'], label='Validation Loss')
+        # Mark best epoch
+        best_epoch = history.get('best_epoch', 0)
+        if best_epoch > 0:
+            ax1.axvline(x=best_epoch-1, color='red', linestyle='--', 
+                       linewidth=2, alpha=0.7,
+                       label=f'Best Epoch ({best_epoch})')
     ax1.set_title('CowBERT Training Loss')
     ax1.set_xlabel('Epoch')
     ax1.set_ylabel('Loss')
     ax1.legend()
+    ax1.grid(alpha=0.3)
     
     # Accuracy plot
     ax2.plot(history['train_acc'], label='Train Accuracy')
     if history['val_acc']:
         ax2.plot(history['val_acc'], label='Validation Accuracy')
+        # Mark best epoch
+        if best_epoch > 0:
+            ax2.axvline(x=best_epoch-1, color='red', linestyle='--',
+                       linewidth=2, alpha=0.7,
+                       label=f'Best Epoch ({best_epoch})')
+            ax2.scatter([best_epoch-1], [history['best_val_acc']], 
+                       color='red', s=100, zorder=5,
+                       label=f'Best Val Acc: {history["best_val_acc"]:.2%}')
     ax2.set_title('CowBERT Training Accuracy')
     ax2.set_xlabel('Epoch')
     ax2.set_ylabel('Accuracy')
     ax2.legend()
+    ax2.grid(alpha=0.3)
     
     plt.tight_layout()
-    plt.savefig(output_dir / 'training_metrics.png')
+    plt.savefig(output_dir / 'training_metrics.png', dpi=300)
     
     # Extract embeddings (Input embeddings)
     # Note: In BERT, input embeddings are context-independent.
@@ -612,9 +748,68 @@ def main():
     final_val_loss = total_val_loss / len(val_dataloader)
     final_val_acc = total_val_acc / len(val_dataloader)
     
+    # Per-cow accuracy analysis
+    print("\n" + "="*70, flush=True)
+    print("PER-COW ACCURACY ANALYSIS", flush=True)
+    print("="*70, flush=True)
+    
+    per_cow_results = calculate_per_cow_accuracy(
+        model, val_dataloader, device, id_to_cow
+    )
+    
+    # Sort by accuracy for display
+    sorted_cows = sorted(
+        per_cow_results.items(), 
+        key=lambda x: x[1]['accuracy'], 
+        reverse=True
+    )
+    
+    # Print top 10 and bottom 10
+    print("\n🔝 TOP 10 EASIEST COWS TO PREDICT:")
+    for i, (cow_name, stats) in enumerate(sorted_cows[:10], 1):
+        print(f"  {i}. {cow_name}: {stats['accuracy']:.2%} "
+              f"({stats['correct']}/{stats['total']})")
+    
+    print("\n🔻 BOTTOM 10 HARDEST COWS TO PREDICT:")
+    for i, (cow_name, stats) in enumerate(sorted_cows[-10:], 1):
+        print(f"  {i}. {cow_name}: {stats['accuracy']:.2%} "
+              f"({stats['correct']}/{stats['total']})")
+    
+    # Calculate statistics
+    accuracies = [stats['accuracy'] for stats in per_cow_results.values()]
+    print(f"\n📊 OVERALL STATISTICS:")
+    print(f"  - Mean accuracy: {np.mean(accuracies):.2%}")
+    print(f"  - Median accuracy: {np.median(accuracies):.2%}")
+    print(f"  - Std deviation: {np.std(accuracies):.2%}")
+    print(f"  - Min accuracy: {np.min(accuracies):.2%}")
+    print(f"  - Max accuracy: {np.max(accuracies):.2%}")
+    
+    # Plot per-cow accuracy
+    plot_per_cow_accuracy(
+        per_cow_results, 
+        output_dir / 'per_cow_accuracy.png',
+        top_n=None  # Plot all cows
+    )
+    
+    # Save detailed per-cow results to CSV
+    per_cow_df = pd.DataFrame([
+        {
+            'cow_id': cow_name,
+            'accuracy': stats['accuracy'],
+            'correct': stats['correct'],
+            'total': stats['total']
+        }
+        for cow_name, stats in sorted_cows
+    ])
+    per_cow_csv = output_dir / 'per_cow_accuracy.csv'
+    per_cow_df.to_csv(per_cow_csv, index=False)
+    print(f"✅ Saved per-cow accuracy data: {per_cow_csv}")
+
+    
+    
     # Print results to console
     print(f"\n{'='*70}", flush=True)
-    print(f"FINAL RESULTS", flush=True)
+    print("FINAL RESULTS", flush=True)
     print(f"{'='*70}", flush=True)
     print(f"Final Validation Loss: {final_val_loss:.4f}", flush=True)
     print(f"Final Validation Accuracy: {final_val_acc:.4f}", flush=True)
@@ -624,30 +819,56 @@ def main():
     results_file = output_dir / 'training_results.txt'
     with open(results_file, 'w') as f:
         f.write(f"{'='*70}\n")
-        f.write(f"COWBERT TRAINING RESULTS\n")
+        f.write("COWBERT TRAINING RESULTS\n")
         f.write(f"{'='*70}\n\n")
-        f.write(f"Configuration:\n")
+        f.write("Configuration:\n")
         f.write(f"  - Embedding dimension: {args.embedding_dim}\n")
         f.write(f"  - Epochs: {args.epochs}\n")
         f.write(f"  - Batch size: {args.batch_size}\n")
         f.write(f"  - Top-k neighbors: {args.top_k}\n\n")
-        f.write(f"Final Results:\n")
+        f.write("Training Results:\n")
+        f.write(f"  - Best epoch: {history.get('best_epoch', 'N/A')}\n")
+        f.write(f"  - Best validation accuracy: "
+                f"{history.get('best_val_acc', 0.0):.4f}\n\n")
+        f.write("Final Evaluation (Best Model):\n")
         f.write(f"  - Validation Loss: {final_val_loss:.4f}\n")
         f.write(f"  - Validation Accuracy: {final_val_acc:.4f}\n\n")
-        f.write(f"Output Files:\n")
-        f.write(f"  - Embeddings: {(output_dir / 'cow_embeddings.pkl').absolute()}\n")
-        f.write(f"  - Training metrics: {(output_dir / 'training_metrics.png').absolute()}\n")
-        f.write(f"  - t-SNE visualization: {(output_dir / 'embeddings_tsne.png').absolute()}\n")
-        f.write(f"  - Similarity report: {(output_dir / 'similarity_report.txt').absolute()}\n")
+        f.write("Per-Cow Accuracy Statistics:\n")
+        accuracies_list = [s['accuracy'] for s in per_cow_results.values()]
+        f.write(f"  - Mean: {np.mean(accuracies_list):.2%}\n")
+        f.write(f"  - Median: {np.median(accuracies_list):.2%}\n")
+        f.write(f"  - Std: {np.std(accuracies_list):.2%}\n")
+        f.write(f"  - Min: {np.min(accuracies_list):.2%}\n")
+        f.write(f"  - Max: {np.max(accuracies_list):.2%}\n\n")
+        f.write("Output Files:\n")
+        f.write(f"  - Embeddings: "
+                f"{(output_dir / 'cow_embeddings.pkl').absolute()}\n")
+        f.write(f"  - Training metrics: "
+                f"{(output_dir / 'training_metrics.png').absolute()}\n")
+        f.write(f"  - t-SNE visualization: "
+                f"{(output_dir / 'embeddings_tsne.png').absolute()}\n")
+        f.write(f"  - Similarity report: "
+                f"{(output_dir / 'similarity_report.txt').absolute()}\n")
+        f.write(f"  - Per-cow accuracy plot: "
+                f"{(output_dir / 'per_cow_accuracy.png').absolute()}\n")
+        f.write(f"  - Per-cow accuracy data: "
+                f"{(output_dir / 'per_cow_accuracy.csv').absolute()}\n")
     
     print(f"\n✅ CowBERT training complete!", flush=True)
     print(f"\nResults saved to: {output_dir.absolute()}", flush=True)
     print(f"  - Training results: {results_file.absolute()}", flush=True)
-    print(f"  - Embeddings: {(output_dir / 'cow_embeddings.pkl').absolute()}", flush=True)
-    print(f"  - Training metrics plot: {(output_dir / 'training_metrics.png').absolute()}", flush=True)
-    print(f"  - t-SNE visualization: {(output_dir / 'embeddings_tsne.png').absolute()}", flush=True)
-    print(f"  - Similarity report: {(output_dir / 'similarity_report.txt').absolute()}", flush=True)
+    print(f"  - Embeddings: "
+          f"{(output_dir / 'cow_embeddings.pkl').absolute()}", flush=True)
+    print(f"  - Training metrics plot: "
+          f"{(output_dir / 'training_metrics.png').absolute()}", flush=True)
+    print(f"  - t-SNE visualization: "
+          f"{(output_dir / 'embeddings_tsne.png').absolute()}", flush=True)
+    print(f"  - Similarity report: "
+          f"{(output_dir / 'similarity_report.txt').absolute()}", flush=True)
+    print(f"  - Per-cow accuracy: "
+          f"{(output_dir / 'per_cow_accuracy.png').absolute()}", flush=True)
     print(f"\n{'='*70}\n", flush=True)
+
 
 if __name__ == "__main__":
     main()

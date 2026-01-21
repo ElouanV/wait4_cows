@@ -16,7 +16,7 @@ from tqdm import tqdm
 ###############################################################################
 
 
-def filter_out_system_files(files_list):
+def filter_out_system_files(files_list: list[str]) -> list[str]:
     """
     Check if the files are system files and remove them from the list
     The following files will also be excluded :
@@ -75,7 +75,7 @@ def get_accelero_id_from_parquet_or_csv_files(
 
 def get_all_files_within_one_folder(
     folder_to_search: str, ordered_by_id: bool, extension: str = "all"
-):
+) -> list[str]:
     """
     This function is used to retrieve all the files from the directories.
 

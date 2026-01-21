@@ -19,7 +19,9 @@ from tqdm import tqdm
 
 
 def cut_accelero_data(
-    accelero_data_: pd.DataFrame, lower_date: pd.DatetimeIndex = 0, upper_date: pd.DatetimeIndex = 0
+    accelero_data_: pd.DataFrame,
+    lower_date: pd.DatetimeIndex = 0,
+    upper_date: pd.DatetimeIndex = 0,
 ) -> pd.DataFrame:
     """
     Cut the accelerometer data for a specific time range
@@ -35,12 +37,18 @@ def cut_accelero_data(
     accelero_data = accelero_data_.copy()
     short_accelero_data = accelero_data[accelero_data["relative_DateTime"] < upper_date]
     if short_accelero_data.empty:
-        short_accelero_data_2 = accelero_data[accelero_data["relative_DateTime"] > lower_date]
-        short_accelero_data_2 = short_accelero_data_2[short_accelero_data_2["relative_DateTime"] < upper_date]
+        short_accelero_data_2 = accelero_data[
+            accelero_data["relative_DateTime"] > lower_date
+        ]
+        short_accelero_data_2 = short_accelero_data_2[
+            short_accelero_data_2["relative_DateTime"] < upper_date
+        ]
         return short_accelero_data_2
 
     else:
-        short_accelero_data = short_accelero_data[short_accelero_data["relative_DateTime"] > lower_date]
+        short_accelero_data = short_accelero_data[
+            short_accelero_data["relative_DateTime"] > lower_date
+        ]
         return short_accelero_data
 
 
@@ -82,20 +90,33 @@ def plot_accelerometer(
         short_accelero_data = cut_accelero_data(accelero_data, lower_date, upper_date)
 
     magnitude = np.sqrt(
-        short_accelero_data["acc_x"] ** 2 + short_accelero_data["acc_y"] ** 2 + short_accelero_data["acc_z"] ** 2
+        short_accelero_data["acc_x"] ** 2
+        + short_accelero_data["acc_y"] ** 2
+        + short_accelero_data["acc_z"] ** 2
     )
 
-    plt.plot(short_accelero_data[column_x_axis], magnitude, alpha=0.6, linewidth=0.5, label=accelero_id)
+    plt.plot(
+        short_accelero_data[column_x_axis],
+        magnitude,
+        alpha=0.6,
+        linewidth=0.5,
+        label=accelero_id,
+    )
 
     handles, labels = plt.gca().get_legend_handles_labels()
     by_label = dict(zip(labels, handles))
     plt.legend(by_label.values(), by_label.keys(), loc="upper right")
     plt.grid()
 
-    plt.title(f"Acceleration data for {accelero_id} - {column_x_axis} - {lower_date} to {upper_date}", wrap=True)
+    plt.title(
+        f"Acceleration data for {accelero_id} - {column_x_axis} - {lower_date} to {upper_date}",
+        wrap=True,
+    )
 
     plt.xlabel(column_x_axis)
-    x_ticks = pd.date_range(start=lower_date, end=upper_date, freq="D")  # Daily frequency
+    x_ticks = pd.date_range(
+        start=lower_date, end=upper_date, freq="D"
+    )  # Daily frequency
     plt.xticks(x_ticks, rotation=45, fontsize=17)
     plt.ylabel("Magnitude (g)")
 
@@ -132,19 +153,32 @@ def plot_2020_accelerometer(
     plt.figure(figsize=(14, 8))
     plt.margins(x=0)
     accelero_data = accelero_data_.copy()
-    accelero_data["relative_DateTime"] = accelero_data["relative_DateTime"] + timedelta(days=days_to_add)
+    accelero_data["relative_DateTime"] = accelero_data["relative_DateTime"] + timedelta(
+        days=days_to_add
+    )
 
     if upper_date == 0 or lower_date == 0:
         short_accelero_data = accelero_data.copy()
-        magnitude = np.sqrt(accelero_data["acc_x"] ** 2 + accelero_data["acc_y"] ** 2 + accelero_data["acc_z"] ** 2)
+        magnitude = np.sqrt(
+            accelero_data["acc_x"] ** 2
+            + accelero_data["acc_y"] ** 2
+            + accelero_data["acc_z"] ** 2
+        )
 
     else:
         short_accelero_data = cut_accelero_data(accelero_data, lower_date, upper_date)
         magnitude = np.sqrt(
-            short_accelero_data["acc_x"] ** 2 + short_accelero_data["acc_y"] ** 2 + short_accelero_data["acc_z"] ** 2
+            short_accelero_data["acc_x"] ** 2
+            + short_accelero_data["acc_y"] ** 2
+            + short_accelero_data["acc_z"] ** 2
         )
 
-    plt.plot(short_accelero_data["relative_DateTime"], magnitude, alpha=0.6, label=accelero_id)
+    plt.plot(
+        short_accelero_data["relative_DateTime"],
+        magnitude,
+        alpha=0.6,
+        label=accelero_id,
+    )
     plt.legend(loc="upper right")
     plt.grid()
     plt.title(
@@ -185,25 +219,40 @@ def plot_multiple_accelerometers(
     plt.margins(x=0)
 
     all_accel_data_to_plot = {
-        sensor_id: all_accel_data[sensor_id] for sensor_id in accel_to_plot_ids if sensor_id in all_accel_data
+        sensor_id: all_accel_data[sensor_id]
+        for sensor_id in accel_to_plot_ids
+        if sensor_id in all_accel_data
     }
     # print("all_accel_data_to_plot", all_accel_data_to_plot)
 
-    for sensor_id, accelero_data_ in tqdm(all_accel_data_to_plot.items(), desc="Plotting magnitude"):
+    for sensor_id, accelero_data_ in tqdm(
+        all_accel_data_to_plot.items(), desc="Plotting magnitude"
+    ):
         if sensor_id not in accel_to_plot_ids or sensor_id == ref_sensor_id:
             continue
         accelero_data = accelero_data_.copy()
         if lower_date == 0 or upper_date == 0:
             short_accelero_data = accelero_data.copy()
-            magnitude = np.sqrt(accelero_data["acc_x"] ** 2 + accelero_data["acc_y"] ** 2 + accelero_data["acc_z"] ** 2)
+            magnitude = np.sqrt(
+                accelero_data["acc_x"] ** 2
+                + accelero_data["acc_y"] ** 2
+                + accelero_data["acc_z"] ** 2
+            )
         else:
-            short_accelero_data = cut_accelero_data(accelero_data, lower_date, upper_date)
+            short_accelero_data = cut_accelero_data(
+                accelero_data, lower_date, upper_date
+            )
             magnitude = np.sqrt(
                 short_accelero_data["acc_x"] ** 2
                 + short_accelero_data["acc_y"] ** 2
                 + short_accelero_data["acc_z"] ** 2
             )
-        plt.plot(short_accelero_data["relative_DateTime"], magnitude, alpha=0.4, label=sensor_id)
+        plt.plot(
+            short_accelero_data["relative_DateTime"],
+            magnitude,
+            alpha=0.4,
+            label=sensor_id,
+        )
 
     if ref_sensor_id != "":  # Adding the reference accelerometer
         if lower_date == 0 or upper_date == 0:
@@ -214,23 +263,37 @@ def plot_multiple_accelerometers(
                 + short_accelero_data["acc_z"] ** 2
             )
         else:
-            short_accelero_data = cut_accelero_data(all_accel_data[ref_sensor_id], lower_date, upper_date)
+            short_accelero_data = cut_accelero_data(
+                all_accel_data[ref_sensor_id], lower_date, upper_date
+            )
             magnitude = np.sqrt(
                 short_accelero_data["acc_x"] ** 2
                 + short_accelero_data["acc_y"] ** 2
                 + short_accelero_data["acc_z"] ** 2
             )
-        plt.plot(short_accelero_data["relative_DateTime"], magnitude, alpha=0.4, label=ref_sensor_id)
+        plt.plot(
+            short_accelero_data["relative_DateTime"],
+            magnitude,
+            alpha=0.4,
+            label=ref_sensor_id,
+        )
 
     plt.legend(loc="upper right")
     plt.grid()
     if lower_date == 0 or upper_date == 0:
         plt.title(
-            "Accelerometer data for the whole time range : for the accelerometers " + str(accel_to_plot_ids), wrap=True
+            "Accelerometer data for the whole time range : for the accelerometers "
+            + str(accel_to_plot_ids),
+            wrap=True,
         )
     else:
         plt.title(
-            str(lower_date) + " to " + str(lower_date) + " for the accelerometers " + str(accel_to_plot_ids), wrap=True
+            str(lower_date)
+            + " to "
+            + str(lower_date)
+            + " for the accelerometers "
+            + str(accel_to_plot_ids),
+            wrap=True,
         )
     plt.xlabel("relative_DateTime")
     plt.ylabel("Magnitude")
@@ -268,35 +331,54 @@ def plot_multiple_2020_accelerometers(
     plt.margins(x=0)
 
     all_accel_data_to_plot = {
-        sensor_id: all_accel_data[sensor_id] for sensor_id in accel_to_plot_ids if sensor_id in all_accel_data
+        sensor_id: all_accel_data[sensor_id]
+        for sensor_id in accel_to_plot_ids
+        if sensor_id in all_accel_data
     }
 
-    for sensor_id, accelero_data_ in tqdm(all_accel_data_to_plot.items(), desc="Plotting magnitude"):
+    for sensor_id, accelero_data_ in tqdm(
+        all_accel_data_to_plot.items(), desc="Plotting magnitude"
+    ):
         if sensor_id not in accel_to_plot_ids or sensor_id == ref_sensor_id:
             continue
         accelero_data = accelero_data_.copy()
 
         # check for the ["relative_DateTime_aligned"] ==> 2020 accelerometers
         if "relative_DateTime_aligned" in accelero_data.columns:
-            accelero_data["relative_DateTime"] = accelero_data["relative_DateTime_aligned"].copy()
+            accelero_data["relative_DateTime"] = accelero_data[
+                "relative_DateTime_aligned"
+            ].copy()
 
         else:  # 2024 accelerometers
-            accelero_data["relative_DateTime"] = accelero_data["relative_DateTime"] + timedelta(days=days_to_add)
-            accelero_data["relative_DateTime"] = accelero_data["relative_DateTime"] + timedelta(
-                seconds=float(seconds_to_add)
-            )
+            accelero_data["relative_DateTime"] = accelero_data[
+                "relative_DateTime"
+            ] + timedelta(days=days_to_add)
+            accelero_data["relative_DateTime"] = accelero_data[
+                "relative_DateTime"
+            ] + timedelta(seconds=float(seconds_to_add))
 
         if lower_date == 0 or upper_date == 0:
             short_accelero_data = accelero_data.copy()
-            magnitude = np.sqrt(accelero_data["acc_x"] ** 2 + accelero_data["acc_y"] ** 2 + accelero_data["acc_z"] ** 2)
+            magnitude = np.sqrt(
+                accelero_data["acc_x"] ** 2
+                + accelero_data["acc_y"] ** 2
+                + accelero_data["acc_z"] ** 2
+            )
         else:
-            short_accelero_data = cut_accelero_data(accelero_data, lower_date, upper_date)
+            short_accelero_data = cut_accelero_data(
+                accelero_data, lower_date, upper_date
+            )
             magnitude = np.sqrt(
                 short_accelero_data["acc_x"] ** 2
                 + short_accelero_data["acc_y"] ** 2
                 + short_accelero_data["acc_z"] ** 2
             )
-        plt.plot(short_accelero_data["relative_DateTime"], magnitude, alpha=0.4, label=sensor_id)
+        plt.plot(
+            short_accelero_data["relative_DateTime"],
+            magnitude,
+            alpha=0.4,
+            label=sensor_id,
+        )
 
     if ref_sensor_id != "":  # Adding the reference accelerometer
         if lower_date == 0 or upper_date == 0:
@@ -307,19 +389,31 @@ def plot_multiple_2020_accelerometers(
                 + short_accelero_data["acc_z"] ** 2
             )
         else:
-            short_accelero_data = cut_accelero_data(all_accel_data[ref_sensor_id], lower_date, upper_date)
+            short_accelero_data = cut_accelero_data(
+                all_accel_data[ref_sensor_id], lower_date, upper_date
+            )
             magnitude = np.sqrt(
                 short_accelero_data["acc_x"] ** 2
                 + short_accelero_data["acc_y"] ** 2
                 + short_accelero_data["acc_z"] ** 2
             )
-        plt.plot(short_accelero_data["relative_DateTime"], magnitude, alpha=0.4, label=ref_sensor_id)
+        plt.plot(
+            short_accelero_data["relative_DateTime"],
+            magnitude,
+            alpha=0.4,
+            label=ref_sensor_id,
+        )
 
     print(accelero_data.head())
     plt.legend(loc="upper right")
     plt.grid()
     plt.title(
-        str(lower_date) + " to " + str(lower_date) + " for the accelerometers " + str(accel_to_plot_ids), wrap=True
+        str(lower_date)
+        + " to "
+        + str(lower_date)
+        + " for the accelerometers "
+        + str(accel_to_plot_ids),
+        wrap=True,
     )
     plt.xlabel("relative_DateTime")
     plt.ylabel("Magnitude")
@@ -354,10 +448,14 @@ def plot_multiple_rssi(
     plt.margins(x=0)
 
     all_rssi_data_to_plot = {
-        sensor_id: all_rssi_data[sensor_id] for sensor_id in accel_to_plot_ids if sensor_id in all_rssi_data
+        sensor_id: all_rssi_data[sensor_id]
+        for sensor_id in accel_to_plot_ids
+        if sensor_id in all_rssi_data
     }
 
-    for sensor_id, rssi_data_ in tqdm(all_rssi_data_to_plot.items(), desc="Plotting RSSI"):
+    for sensor_id, rssi_data_ in tqdm(
+        all_rssi_data_to_plot.items(), desc="Plotting RSSI"
+    ):
         if sensor_id not in accel_to_plot_ids:
             continue
         rssi_data_1 = rssi_data_.copy()
@@ -366,12 +464,21 @@ def plot_multiple_rssi(
         else:
             short_rssi_data = cut_accelero_data(rssi_data_1, lower_date, upper_date)
 
-        plt.scatter(short_rssi_data["relative_DateTime"], short_rssi_data["RSSI"], alpha=0.4, label=sensor_id)
+        plt.scatter(
+            short_rssi_data["relative_DateTime"],
+            short_rssi_data["RSSI"],
+            alpha=0.4,
+            label=sensor_id,
+        )
 
     plt.legend(loc="upper right")
     plt.grid()
     if lower_date == 0 or upper_date == 0:
-        plt.title("RSSI data for the whole time range for the accelerometers " + str(accel_to_plot_ids), wrap=True)
+        plt.title(
+            "RSSI data for the whole time range for the accelerometers "
+            + str(accel_to_plot_ids),
+            wrap=True,
+        )
     else:
         plt.title(
             "RSSI data from "
@@ -437,13 +544,22 @@ def plot_single_sensor_separate_rssi(
     if accel_to_plot_ids == "all":
         accelero_to_plot = unique_accelero
     else:
-        accelero_to_plot = [accelero_id for accelero_id in accel_to_plot_ids if accelero_id in unique_accelero]
+        accelero_to_plot = [
+            accelero_id
+            for accelero_id in accel_to_plot_ids
+            if accelero_id in unique_accelero
+        ]
     splitted_id_accelero = np.array_split(accelero_to_plot, number_of_plots)
 
     for i, ax in enumerate(axs.flat):
         for ble_id in splitted_id_accelero[i]:
             rssi_tab_ble = short_rssi_data[short_rssi_data["accelero_id"] == ble_id]
-            ax.plot(rssi_tab_ble[column_x_axis], rssi_tab_ble["RSSI"], label=ble_id, linewidth=0.5)
+            ax.plot(
+                rssi_tab_ble[column_x_axis],
+                rssi_tab_ble["RSSI"],
+                label=ble_id,
+                linewidth=0.5,
+            )
             ax.set_xlabel(column_x_axis)
             ax.set_ylabel("RSSI (dBm)")
             ax.set_title(
