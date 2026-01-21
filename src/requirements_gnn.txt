@@ -1,0 +1,8 @@
+# Minimal hints — pick the appropriate torch wheel for your CUDA / CPU
+# Example (CPU-only):
+# pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cpu
+# Then install torch-geometric following the official instructions.
+
+torch>=2.0
+# torch-geometric requires specific wheels matching torch and platform. See:
+# https://pytorch-geometric.readthedocs.io/en/latest/notes/installation.html
