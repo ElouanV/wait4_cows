@@ -13,4 +13,6 @@ Vidéos
 .coverage
 htmlcov/
 tests/test_data/
-Vidéos
+cowbert_out
+network_sequence
+
