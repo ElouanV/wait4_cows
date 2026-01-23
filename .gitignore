@@ -13,6 +13,7 @@ Vidéos
 .coverage
 htmlcov/
 tests/test_data/
+Vidéos
 cowbert_out
+presentation_plots
 network_sequence
-
